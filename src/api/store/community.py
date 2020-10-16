@@ -14,6 +14,7 @@ class CommunityStore:
 
   def get_community_info(self, context: Context, args) -> (dict, MassEnergizeAPIError):
     try:
+      
       subdomain = args.get('subdomain', None)
       community_id = args.get('id', None)
 
@@ -25,8 +26,8 @@ class CommunityStore:
         return None, InvalidResourceError()
 
       
-      if context.is_prod and not community.is_published and not context.user_is_admin():
-          return None, InvalidResourceError()
+      if context.is_prod and not community.is_published and not context.is_admin_site:
+        return None, InvalidResourceError()
 
       return community, None
     except Exception as e:
