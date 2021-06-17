@@ -3,6 +3,7 @@ from _main_.utils.massenergize_errors import CustomMassenergizeError
 from _main_.utils.massenergize_response import MassenergizeResponse
 from _main_.utils.context import Context
 from database.utils.common import json_loader
+from database.models import CarbonEquivalency
 from .utils import find_reu_community, split_location_string, check_location
 from sentry_sdk import capture_message
 
@@ -271,3 +272,38 @@ class MiscellaneousStore:
     except Exception as e:
       capture_message(str(e), level="error")
       return None, CustomMassenergizeError(e)
+  
+  
+  def create_carbon_equivalency(self, args):
+    try:
+      new_carbon_equivalency = CarbonEquivalency.objects.objects.create(**args)
+      new_carbon_equivalency.save()
+      return {}, None
+
+    except Exception as e:
+      capture_message(str(e), level="error")
+      return None, CustomMassenergizeError(e)
+
+
+  def update_carbon_equivalency(self, tag_id, args):
+    carbon_equivalency = CarbonEquivalency.objects.filter(id=tag_id)
+
+    if not carbon_equivalency:
+      return None, InvalidResourceError()
+
+    carbon_equivalency.update(**args)
+    return carbon_equivalency, None
+
+
+  def get_carbon_equivalencies(self, args):
+    carbon_equivalencies = CarbonEquivalency.objects.filter(is_deleted=False)
+    return carbon_equivalencies, None
+
+  def delete_carbon_equivalency(self, tag_id, args):
+    carbon_equivalency = CarbonEquivalency.objects.filter(id=tag_id)
+
+    if not carbon_equivalency:
+      return None, InvalidResourceError()
+
+    carbon_equivalency.delete(**args)
+    return carbon_equivalency, None
