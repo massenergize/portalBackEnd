@@ -496,8 +496,7 @@ class UserProfile(models.Model):
   created_at: DateTime
     The date and time of the last time any updates were made to the information
     about this goal
-  color = models.TextField(default="#000000", max_length=7, null=True)
-
+    
   #TODO: roles field: if we have this do we need is_superadmin etc? also why
   #  not just one?  why many to many
   """

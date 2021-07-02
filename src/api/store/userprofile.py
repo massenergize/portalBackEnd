@@ -197,6 +197,130 @@ class UserStore:
       return None, CustomMassenergizeError(e)
 
 
+  def check_user_imported(self, context: Context, args) -> (list, MassEnergizeAPIError):
+    try:
+
+      email_address = args.get('email', None)
+      profile = UserProfile.objects.filter(email=email_address).first()
+      name = profile.full_name.split()
+      first_name = name[0]
+      last_name = name[1]
+      imported = not profile.accepts_terms_and_conditions
+
+      return {"imported":imported, "firstName": first_name, "lastName": last_name, "preferredName": first_name}, None
+    except Exception as e:
+      capture_message(str(e), level="error")
+      return None, CustomMassenergizeError(e)
+
+  def import_contacts(self, context: Context, args) -> (list, MassEnergizeAPIError):
+
+    try:
+      registered_community = None
+      community_id = args.get("community_id", None)
+      if community_id:
+        community = Community.objects.filter(id=community_id)
+        if community:
+          registered_community = community.first()
+
+      else:
+        # This wont work for a super admin; 
+        # TODO: test this for community not in the community admin list
+
+        # query users by user id, find the user that is sending the request
+        cadmin = UserProfile.objects.filter(id=context.user_id).first()
+        # find the community that the user is the admin of. In the next section, populate user profiles with that information
+        registered_community = None
+        for community in cadmin.communities.all():
+            admin_group = CommunityAdminGroup.objects.filter(community=community).first()
+            if cadmin in admin_group.members.all():
+              break
+        registered_community = community
+
+      # find the community within the team that the 
+      csv_ref = args['csv'].file 
+      first_name_field = args.get('first_name_field', None)
+      last_name_field = args.get('last_name_field', None)   
+      email_field = args.get('email_field', None)
+      valid_imports = 0
+      invalid_imports = 0
+      existing_users = 0
+
+      # csv_ref is a bytes object, we need a csv
+      # so we copy it as a csv temporarily to the disk
+      temporarylocation="testout.csv"
+      with open(temporarylocation, 'wb') as out:
+        var = csv_ref.read()
+        out.write(var)
+      # invalid_emails keeps track of any lines in the file that don't have a valid email address
+      invalid_emails = []
+      with open(temporarylocation, "r") as f:
+        reader = csv.DictReader(f, delimiter=",")
+        for row in reader:
+          column_list = list(row.keys())
+
+          # prevents the first row (headers) from being read in as a user
+          if row[first_name_field] == column_list[0]:
+            continue
+          # verify correctness of email address
+          regex = '^[a-z0-9]+[\._]?[a-z0-9]+[@]\w+[.]\w{2,3}$'
+
+          if(re.search(regex,row[email_field])):   
+            user = UserProfile.objects.filter(email=row[email_field]).first()
+            if not user:
+              if row[email_field] == "" or not row[email_field]:
+                invalid_emails.append(reader.line_num)
+                invalid_imports += 1
+                continue                
+                #return None, CustomMassenergizeError("One of more of your user(s) lacks a valid email address. Please make sure all your users have valid email addresses listed.")
+              new_user: UserProfile = UserProfile.objects.create(
+                full_name = row[first_name_field] + ' ' + row[last_name_field], 
+                preferred_name = row[first_name_field], 
+                email = row[email_field],
+                is_vendor = False, 
+                accepts_terms_and_conditions = False
+              )
+ 
+              if registered_community:
+                new_user.communities.add(registered_community)
+              new_user.save()
+              valid_imports += 1
+            else: 
+              new_user: UserProfile = user
+              existing_users += 1 
+
+            team_name = args.get('team_name', None)
+            team = None
+            if team_name and team_name != "none":
+              team = Team.objects.filter(name=team_name).first()
+              team.members.add(new_user)
+              team.save()
+            new_user.save()
+            # send email inviting user to complete their profile
+            message = cadmin.full_name + " invited you to join the following MassEnergize Community: " + registered_community.name + "\n"
+            mess = args.get('message', None)
+            if mess and mess != "":
+              message += "They have included a message for you here:\n"
+              message += mess
+            if team:
+              message += "You have been assigned to the following team: " + team.name + "\n"
+            link = "massenergize.org/" + str(registered_community.subdomain) + "/signup"
+            print(link)
+            message += "Use the following link to join " + registered_community.name + ": " + link
+            send_massenergize_email(subject= cadmin.full_name + " invited you to join a MassEnergize Community", msg=message, to=new_user.email)
+          else:   
+            if reader.line_num != 0:
+              invalid_emails.append(reader.line_num) 
+              invalid_imports += 1
+
+      # and then delete it once we are done parsing it
+      os.remove(temporarylocation)
+      return {'importedUsers': valid_imports, 'existingUsers': existing_users, 'invalidEmails' : invalid_emails}, None
+
+    except Exception as e:
+      capture_message(str(e), level="error")
+      return None, CustomMassenergizeError(e)
+
+
   def create_user(self, context: Context, args) -> (dict, MassEnergizeAPIError):
     try:
 
@@ -216,7 +340,7 @@ class UserStore:
           email = args.get('email'), 
           is_vendor = args.get('is_vendor', False), 
           accepts_terms_and_conditions = args.pop('accepts_terms_and_conditions', False), 
-          preferences = {'color': args.get('color')}
+          #preferences = {'color': args.get('color')}
         )
       else:
         new_user: UserProfile = user

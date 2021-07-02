@@ -377,3 +377,9 @@ class UserProfileTestCase(TestCase):
         signinAs(self.client, self.SADMIN)
         response = self.client.post('/v3/users.listForSuperAdmin', urlencode({}), content_type="application/x-www-form-urlencoded").toDict()
         self.assertTrue(response["success"])
+
+    def test_check_user_imported(self):
+        pass
+
+    def test_import_users(self):
+        pass
