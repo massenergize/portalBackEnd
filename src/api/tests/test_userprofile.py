@@ -380,6 +380,18 @@ class UserProfileTestCase(TestCase):
 
     def test_check_user_imported(self):
         pass
+        # test as non-signed in
+        # check a non-existant user
+        # check a regular user
+        # check an imported user
 
     def test_import_users(self):
         pass
+        # tests
+        # import users as not-signed in (FAIL)
+        # import users signed in as regular user (FAIL)
+        # import users as Cadmin, correct community\
+        # import users as Cadmin, wrong community
+        # import users as Sadmin
+        # Import users with a bad e-mail included
+        # Import users with a team specified
