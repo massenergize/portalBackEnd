@@ -9,6 +9,7 @@ from carbon_calculator.models import Action as CCAction
 import uuid
 import time
 
+
 CHOICES = json_loader('./database/raw_data/other/databaseFieldChoices.json')
 ZIP_CODE_AND_STATES = json_loader('./database/raw_data/other/states.json')
 
@@ -495,6 +496,7 @@ class UserProfile(models.Model):
   created_at: DateTime
     The date and time of the last time any updates were made to the information
     about this goal
+  color = models.TextField(default="#000000", max_length=7, null=True)
 
   #TODO: roles field: if we have this do we need is_superadmin etc? also why
   #  not just one?  why many to many
@@ -519,6 +521,7 @@ class UserProfile(models.Model):
   created_at = models.DateTimeField(auto_now_add=True)
   updated_at = models.DateTimeField(auto_now=True)
   is_deleted = models.BooleanField(default=False, blank=True)
+  # preferences = JSONField(dict)
 
   def __str__(self):
     return self.email
@@ -557,7 +560,6 @@ class UserProfile(models.Model):
   class Meta:
     db_table = 'user_profiles' 
     ordering = ('-created_at',)
-
 
 class CommunityMember(models.Model):
   id = models.AutoField(primary_key=True)

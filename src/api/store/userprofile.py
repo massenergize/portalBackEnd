@@ -1,12 +1,15 @@
-from database.models import UserProfile, CommunityMember, EventAttendee, RealEstateUnit, Location, UserActionRel, Vendor, Action, Data, Community
+from database.models import UserProfile, CommunityMember, EventAttendee, RealEstateUnit, Location, UserActionRel, Vendor, Action, Data, Community, Media, CommunityAdminGroup, Team
 from _main_.utils.massenergize_errors import MassEnergizeAPIError, InvalidResourceError, ServerError, CustomMassenergizeError, NotAuthorizedError
 from _main_.utils.massenergize_response import MassenergizeResponse
+from _main_.utils.emailer.send_email import send_massenergize_email
 from _main_.utils.context import Context
 from _main_.settings import DEBUG
 from django.db.models import F
 from sentry_sdk import capture_message
 from .utils import get_community, get_user, get_user_or_die, get_community_or_die, get_admin_communities, remove_dups, find_reu_community, split_location_string, check_location
 import json
+# for import contacts endpoint - accepts a csv file and verifies correctness of email address format
+import csv, os, io, re
 
 def _get_or_create_reu_location(args, user=None):
   unit_type=args.pop('unit_type', None)
@@ -200,13 +203,11 @@ class UserStore:
       email = args.get('email', None) 
       community = get_community_or_die(context, args)
 
-
       # allow home address to be passed in
       location = args.pop('location', '')
 
       if not email:
         return None, CustomMassenergizeError("email required for sign up")
-      
       user = UserProfile.objects.filter(email=email).first()
       if not user:
         new_user: UserProfile = UserProfile.objects.create(
@@ -214,10 +215,16 @@ class UserStore:
           preferred_name = args.get('preferred_name', None), 
           email = args.get('email'), 
           is_vendor = args.get('is_vendor', False), 
-          accepts_terms_and_conditions = args.pop('accepts_terms_and_conditions', False)
+          accepts_terms_and_conditions = args.pop('accepts_terms_and_conditions', False), 
+          preferences = {'color': args.get('color')}
         )
       else:
         new_user: UserProfile = user
+        # if user was imported but profile incomplete, updates user with info submitted in form
+        if not new_user.accepts_terms_and_conditions:
+          new_user.accepts_terms_and_conditions = args.pop('accepts_terms_and_conditions', False)
+          is_vendor = args.get('is_vendor', False)
+          preferences = {'color': args.get('color')}
 
 
       community_member_exists = CommunityMember.objects.filter(user=new_user, community=community).exists()
@@ -229,7 +236,6 @@ class UserStore:
         household = RealEstateUnit.objects.create(name="Home", unit_type="residential", community=community, location=location)
         new_user.real_estate_units.add(household)
     
-      
       res = {
         "user": new_user,
         "community": community
@@ -249,11 +255,22 @@ class UserStore:
         return None, CustomMassenergizeError("permission_denied")
 
       if context.user_is_logged_in and ((context.user_id == user_id) or (context.user_is_admin())):
-        user = UserProfile.objects.filter(id=user_id)
-        if not user:
+        users = UserProfile.objects.filter(id=user_id)
+        if len(users) == 0:
           return None, InvalidResourceError()
-
-        user.update(**args)
+        # print('id: ' + user.id)
+        user = users[0]
+        user.full_name = args['full_name']
+        user.preferred_name = args['preferred_name']
+        user.save()
+        if args['profile_picture']:
+          pic = Media()
+          pic.name = f'{user.full_name} profpic'
+          pic.file = args['profile_picture']
+          pic.media_type = 'image'
+          pic.save()
+        user.profile_picture = pic
+        user.save()
         return user.first(), None
       else:
         return None, CustomMassenergizeError('permission_denied')
@@ -504,3 +521,6 @@ class UserStore:
     except Exception as e:
       capture_message(str(e), level="error")
       return None, CustomMassenergizeError(str(e))
+  
+  
+
