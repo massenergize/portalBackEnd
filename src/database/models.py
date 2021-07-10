@@ -2221,7 +2221,7 @@ class DonatePageSettings(models.Model):
   sub_title = models.CharField(max_length=LONG_STR_LEN, blank=True)
   description = models.TextField(max_length=LONG_STR_LEN, blank = True)
   images = models.ManyToManyField(Media, blank=True)
-  featured_video_link = models.CharField(max_length=SHORT_STR_LEN, blank = True)
+  featured_video_link = models.CharField(max_length=LONG_STR_LEN, blank = True)
   donation_link = models.CharField(max_length=LONG_STR_LEN, blank=True)
   more_info = JSONField(blank=True, null=True)
   is_deleted = models.BooleanField(default=False, blank=True)
